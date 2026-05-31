@@ -6,7 +6,7 @@ import consola from "consola"
 import { serve, type ServerHandler } from "srvx"
 import invariant from "tiny-invariant"
 
-import { ensurePaths } from "./lib/paths"
+import { ensurePaths, PATHS } from "./lib/paths"
 import { initProxyFromEnv } from "./lib/proxy"
 import { generateEnvScript } from "./lib/shell"
 import { state } from "./lib/state"
@@ -25,6 +25,7 @@ interface RunServerOptions {
   claudeCode: boolean
   showToken: boolean
   proxyEnv: boolean
+  htmlLog: boolean
 }
 
 export async function runServer(options: RunServerOptions): Promise<void> {
@@ -46,6 +47,11 @@ export async function runServer(options: RunServerOptions): Promise<void> {
   state.rateLimitSeconds = options.rateLimit
   state.rateLimitWait = options.rateLimitWait
   state.showToken = options.showToken
+  state.htmlLog = options.htmlLog
+
+  if (options.htmlLog) {
+    consola.info(`HTML request log enabled: ${PATHS.HTML_LOG_PATH}`)
+  }
 
   await ensurePaths()
   await cacheVSCodeVersion()
@@ -184,6 +190,13 @@ export const start = defineCommand({
       default: false,
       description: "Initialize proxy from environment variables",
     },
+    "html-log": {
+      alias: "l",
+      type: "boolean",
+      default: false,
+      description:
+        "Log full request/response payloads to a browsable HTML file",
+    },
   },
   run({ args }) {
     const rateLimitRaw = args["rate-limit"]
@@ -202,6 +215,7 @@ export const start = defineCommand({
       claudeCode: args["claude-code"],
       showToken: args["show-token"],
       proxyEnv: args["proxy-env"],
+      htmlLog: args["html-log"],
     })
   },
 })
