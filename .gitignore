@@ -12,3 +12,9 @@ node_modules/
 
 # build output
 dist/
+# runtime logs (local-only)
+copilot-api.log
+logs/
+
+# npm lockfile (upstream does not track one)
+package-lock.json
