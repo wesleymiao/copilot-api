@@ -5,9 +5,11 @@ import consola from "consola"
 
 export class HTTPError extends Error {
   response: Response
+  status: number
 
   constructor(message: string, response: Response) {
     super(message)
+    this.status = response.status
     this.response = response
   }
 }

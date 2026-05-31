@@ -47,7 +47,8 @@ export async function handleCompletion(c: Context) {
     consola.debug("Set max_tokens to:", JSON.stringify(payload.max_tokens))
   }
 
-  const response = await createChatCompletions(payload)
+  const streamAbort = new AbortController()
+  const response = await createChatCompletions(payload, streamAbort.signal)
 
   if (isNonStreaming(response)) {
     consola.debug("Non-streaming response:", JSON.stringify(response))
@@ -56,6 +57,8 @@ export async function handleCompletion(c: Context) {
 
   consola.debug("Streaming response")
   return streamSSE(c, async (stream) => {
+    stream.onAbort(() => streamAbort.abort())
+
     for await (const chunk of response) {
       consola.debug("Streaming chunk:", JSON.stringify(chunk))
       await stream.writeSSE(chunk as SSEMessage)

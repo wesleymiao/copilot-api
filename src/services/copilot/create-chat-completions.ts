@@ -7,6 +7,7 @@ import { state } from "~/lib/state"
 
 export const createChatCompletions = async (
   payload: ChatCompletionsPayload,
+  signal?: AbortSignal,
 ) => {
   if (!state.copilotToken) throw new Error("Copilot token not found")
 
@@ -40,7 +41,7 @@ export const createChatCompletions = async (
   }
 
   if (payload.stream) {
-    return events(response)
+    return events(response, signal)
   }
 
   return (await response.json()) as ChatCompletionResponse

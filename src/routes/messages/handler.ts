@@ -38,7 +38,8 @@ export async function handleCompletion(c: Context) {
     await awaitApproval()
   }
 
-  const response = await createChatCompletions(openAIPayload)
+  const streamAbort = new AbortController()
+  const response = await createChatCompletions(openAIPayload, streamAbort.signal)
 
   if (isNonStreaming(response)) {
     consola.debug(
@@ -55,6 +56,8 @@ export async function handleCompletion(c: Context) {
 
   consola.debug("Streaming response from Copilot")
   return streamSSE(c, async (stream) => {
+    stream.onAbort(() => streamAbort.abort())
+
     const streamState: AnthropicStreamState = {
       messageStartSent: false,
       contentBlockIndex: 0,
@@ -63,6 +66,7 @@ export async function handleCompletion(c: Context) {
     }
 
     for await (const rawEvent of response) {
+      if (streamAbort.signal.aborted) break
       consola.debug("Copilot raw stream event:", JSON.stringify(rawEvent))
       if (rawEvent.data === "[DONE]") {
         break
