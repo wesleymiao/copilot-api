@@ -5,11 +5,26 @@ import { copilotHeaders, copilotBaseUrl } from "~/lib/api-config"
 import { HTTPError } from "~/lib/error"
 import { state } from "~/lib/state"
 
+import type { ResponsesResponse, ResponsesStreamEvent } from "./responses-types"
+
+import { createResponses } from "./create-responses"
+import {
+  createResponsesStreamState,
+  isResponsesApiModel,
+  translateChatCompletionsToResponses,
+  translateResponsesEventToChatChunks,
+  translateResponsesToChatCompletion,
+} from "./responses-translation"
+
 export const createChatCompletions = async (
   payload: ChatCompletionsPayload,
   signal?: AbortSignal,
 ) => {
   if (!state.copilotToken) throw new Error("Copilot token not found")
+
+  if (isResponsesApiModel(payload.model)) {
+    return createResponsesChatCompletion(payload, signal)
+  }
 
   const enableVision = payload.messages.some(
     (x) =>
@@ -47,6 +62,47 @@ export const createChatCompletions = async (
   return (await response.json()) as ChatCompletionResponse
 }
 
+async function createResponsesChatCompletion(
+  payload: ChatCompletionsPayload,
+  signal?: AbortSignal,
+) {
+  const responsesPayload = translateChatCompletionsToResponses(payload)
+  const response = await createResponses(responsesPayload, signal)
+
+  if (!payload.stream) {
+    return translateResponsesToChatCompletion(response as ResponsesResponse)
+  }
+
+  return translateResponsesStream(response as AsyncIterable<{ data?: string }>)
+}
+
+async function* translateResponsesStream(
+  response: AsyncIterable<{ data?: string }>,
+) {
+  const streamState = createResponsesStreamState()
+
+  for await (const rawEvent of response) {
+    if (!rawEvent.data || rawEvent.data === "[DONE]") {
+      continue
+    }
+
+    const event = JSON.parse(rawEvent.data) as ResponsesStreamEvent
+    for (const chunk of translateResponsesEventToChatChunks(
+      event,
+      streamState,
+    )) {
+      yield { data: JSON.stringify(chunk) }
+    }
+
+    if (
+      event.type === "response.completed"
+      || event.type === "response.incomplete"
+    ) {
+      yield { data: "[DONE]" }
+    }
+  }
+}
+
 // Streaming types
 
 export interface ChatCompletionChunk {
@@ -70,7 +126,7 @@ export interface ChatCompletionChunk {
   }
 }
 
-interface Delta {
+export interface Delta {
   content?: string | null
   role?: "user" | "assistant" | "system" | "tool"
   tool_calls?: Array<{
